@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guess the Number</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #e6edf2;
+    --ink: #1b2a41;
+    --range: #f2c14e;
+    --good: #2f7d5b;
+    --bad: #b5473a;
+    --card: #f7fafc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121b29;
+      --ink: #e6edf2;
+      --card: #1b2a41;
+      --range: #c99a2e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+  main { width: 100%; max-width: 520px; }
+  h1 {
+    font-size: clamp(2.4rem, 11vw, 3.6rem);
+    font-weight: 800;
+    line-height: 1;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .sub { margin: 0 0 36px; font-weight: 500; opacity: 0.75; }
+
+  .line-wrap { margin-bottom: 32px; }
+  .track {
+    position: relative;
+    height: 14px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--ink) 15%, transparent);
+  }
+  .range {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: var(--range);
+    border-radius: 7px;
+    transition: left 0.45s ease, width 0.45s ease;
+  }
+  .dot {
+    position: absolute;
+    top: 50%;
+    width: 12px; height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 50%;
+    background: var(--ink);
+    border: 2px solid var(--paper);
+  }
+  .dot.win { background: var(--good); width: 22px; height: 22px; margin: -11px 0 0 -11px; }
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    opacity: 0.7;
+  }
+  .hint { margin: 14px 0 0; font-weight: 500; }
+
+  .play { display: flex; gap: 10px; }
+  input {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-size: 1.4rem;
+    font-weight: 800;
+    padding: 14px 16px;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+  }
+  button {
+    font: inherit;
+    font-weight: 800;
+    padding: 14px 22px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.97); }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--range); outline-offset: 2px; }
+
+  #message {
+    min-height: 2.6em;
+    margin: 20px 0 8px;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  #message.shake { animation: shake 0.3s; }
+  @keyframes shake {
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .range { transition: none; }
+    #message.shake { animation: none; }
+  }
+
+  #history { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+  #history li {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--card);
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+  #history li.win { background: var(--good); color: #fff; font-weight: 800; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Guess the number</h1>
+  <p class="sub">I'm thinking of a number from 1 to 100.</p>
+
+  <div class="line-wrap">
+    <div class="track" id="track">
+      <div class="range" id="range"></div>
+    </div>
+    <div class="ends"><span>1</span><span>100</span></div>
+    <p class="hint" id="hint">The yellow bar shows where it could be.</p>
+  </div>
+
+  <div class="play">
+    <input id="guess" type="number" inputmode="numeric" min="1" max="100" placeholder="Your guess" aria-label="Your guess">
+    <button id="go">Guess</button>
+  </div>
+
+  <p id="message" aria-live="polite"></p>
+  <ul id="history"></ul>
+</main>
+
+<script>
+  const MIN = 1, MAX = 100;
+  let secret, lo, hi, tries, over;
+
+  const $ = (id) => document.getElementById(id);
+  const input = $("guess"), go = $("go"), msg = $("message");
+  const track = $("track"), rangeEl = $("range"), hint = $("hint"), history = $("history");
+
+  const pct = (n) => ((n - MIN) / (MAX - MIN)) * 100;
+
+  function drawRange() {
+    rangeEl.style.left = pct(lo) + "%";
+    rangeEl.style.width = Math.max(pct(hi) - pct(lo), 1) + "%";
+    hint.textContent = lo === hi
+      ? "Only one number left."
+      : "It's between " + lo + " and " + hi + ".";
+  }
+
+  function addDot(n, win) {
+    const d = document.createElement("div");
+    d.className = "dot" + (win ? " win" : "");
+    d.style.left = pct(n) + "%";
+    track.appendChild(d);
+  }
+
+  function addChip(n, win) {
+    const li = document.createElement("li");
+    li.textContent = n;
+    if (win) li.className = "win";
+    history.appendChild(li);
+  }
+
+  function say(text, color) {
+    msg.textContent = text;
+    msg.style.color = color || "inherit";
+    msg.classList.remove("shake");
+    void msg.offsetWidth;
+    msg.classList.add("shake");
+  }
+
+  function newGame() {
+    secret = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+    lo = MIN; hi = MAX; tries = 0; over = false;
+    track.querySelectorAll(".dot").forEach((d) => d.remove());
+    history.innerHTML = "";
+    msg.textContent = "";
+    input.value = "";
+    input.disabled = false;
+    go.textContent = "Guess";
+    drawRange();
+    input.focus();
+  }
+
+  function guess() {
+    if (over) { newGame(); return; }
+    const n = parseInt(input.value, 10);
+    if (isNaN(n) || n < MIN || n > MAX) {
+      say("Enter a whole number from " + MIN + " to " + MAX + ".", "var(--bad)");
+      return;
+    }
+    tries++;
+    input.value = "";
+
+    if (n === secret) {
+      over = true;
+      addDot(n, true);
+      addChip(n, true);
+      lo = hi = n;
+      drawRange();
+      hint.textContent = "Found it.";
+      say("Correct! You got it in " + tries + (tries === 1 ? " try." : " tries."), "var(--good)");
+      input.disabled = true;
+      go.textContent = "Play again";
+      go.focus();
+      return;
+    }
+
+    addDot(n, false);
+    addChip(n, false);
+    if (n < secret) {
+      lo = Math.max(lo, n + 1);
+      say(n + " is too low.", "var(--bad)");
+    } else {
+      hi = Math.min(hi, n - 1);
+      say(n + " is too high.", "var(--bad)");
+    }
+    drawRange();
+    input.focus();
+  }
+
+  go.addEventListener("click", guess);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") guess(); });
+  newGame();
+</script>
+</body>
+</html>
