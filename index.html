@@ -44,6 +44,21 @@
   }
   .sub { margin: 0 0 36px; font-weight: 500; opacity: 0.75; }
 
+  .setup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 28px;
+    font-weight: 500;
+  }
+  .setup input { flex: 0 1 130px; font-size: 1.1rem; padding: 10px 12px; }
+  .setup button {
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+  }
+
   .line-wrap { margin-bottom: 32px; }
   .track {
     position: relative;
@@ -134,13 +149,19 @@
 <body>
 <main>
   <h1>Guess the number</h1>
-  <p class="sub">I'm thinking of a number from 1 to 100.</p>
+  <p class="sub" id="sub"></p>
+
+  <div class="setup">
+    <label for="maxInput">Play up to</label>
+    <input id="maxInput" type="number" inputmode="numeric" min="2" max="1000000" value="100">
+    <button id="newGame">New game</button>
+  </div>
 
   <div class="line-wrap">
     <div class="track" id="track">
       <div class="range" id="range"></div>
     </div>
-    <div class="ends"><span>1</span><span>100</span></div>
+    <div class="ends"><span>1</span><span id="maxLabel">100</span></div>
     <p class="hint" id="hint">The yellow bar shows where it could be.</p>
   </div>
 
@@ -154,11 +175,13 @@
 </main>
 
 <script>
-  const MIN = 1, MAX = 100;
+  const MIN = 1;
+  let MAX = 100;
   let secret, lo, hi, tries, over;
 
   const $ = (id) => document.getElementById(id);
   const input = $("guess"), go = $("go"), msg = $("message");
+  const maxInput = $("maxInput"), sub = $("sub"), maxLabel = $("maxLabel");
   const track = $("track"), rangeEl = $("range"), hint = $("hint"), history = $("history");
 
   const pct = (n) => ((n - MIN) / (MAX - MIN)) * 100;
@@ -194,6 +217,12 @@
   }
 
   function newGame() {
+    const m = parseInt(maxInput.value, 10);
+    MAX = (!isNaN(m) && m >= 2 && m <= 1000000) ? m : 100;
+    maxInput.value = MAX;
+    sub.textContent = "I'm thinking of a number from 1 to " + MAX + ".";
+    maxLabel.textContent = MAX;
+    input.max = MAX;
     secret = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
     lo = MIN; hi = MAX; tries = 0; over = false;
     track.querySelectorAll(".dot").forEach((d) => d.remove());
@@ -243,6 +272,8 @@
     input.focus();
   }
 
+  $("newGame").addEventListener("click", newGame);
+  maxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") newGame(); });
   go.addEventListener("click", guess);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") guess(); });
   newGame();
